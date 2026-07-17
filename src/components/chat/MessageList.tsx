@@ -34,7 +34,7 @@ export const MessageList: React.FC<MessageListProps> = ({
       {/* Scrollable Container */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-2 sm:px-6 py-6 space-y-2 scroll-smooth"
+        className="flex-1 overflow-y-auto px-2 sm:px-6 py-6 space-y-2"
       >
         <div className="max-w-3xl mx-auto flex flex-col divide-y divide-gray-100/50 dark:divide-gray-800/30">
           {messages.map((message) => (

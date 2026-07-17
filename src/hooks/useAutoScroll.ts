@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 
 const BOTTOM_THRESHOLD = 80; // px
 
@@ -6,6 +6,8 @@ export function useAutoScroll() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const isPinnedToBottomRef = useRef(true);
+  const pendingScrollFrameRef = useRef<number | null>(null);
 
   const getDistanceToBottom = useCallback((): number => {
     const el = containerRef.current;
@@ -14,8 +16,18 @@ export function useAutoScroll() {
   }, []);
 
   const handleScroll = useCallback(() => {
-    setShowScrollButton(getDistanceToBottom() > BOTTOM_THRESHOLD);
+    const isAtBottom = getDistanceToBottom() <= BOTTOM_THRESHOLD;
+    isPinnedToBottomRef.current = isAtBottom;
+    setShowScrollButton(!isAtBottom);
   }, [getDistanceToBottom]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingScrollFrameRef.current !== null) {
+        cancelAnimationFrame(pendingScrollFrameRef.current);
+      }
+    };
+  }, []);
 
   // Callback ref — fires immediately whenever the DOM node mounts or unmounts.
   // This avoids the stale-ref problem: useEffect fires too late (after first render
@@ -37,17 +49,27 @@ export function useAutoScroll() {
 
   // Used by RAF streaming loop — reads DOM directly, no stale ref
   const scrollIfAtBottom = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (getDistanceToBottom() <= BOTTOM_THRESHOLD) {
-      el.scrollTop = el.scrollHeight; // instant, no animation — smooth stream feel
+    if (!isPinnedToBottomRef.current) return;
+
+    if (pendingScrollFrameRef.current !== null) {
+      cancelAnimationFrame(pendingScrollFrameRef.current);
     }
-  }, [getDistanceToBottom]);
+
+    // Wait for React to commit the latest streamed content before measuring.
+    pendingScrollFrameRef.current = requestAnimationFrame(() => {
+      pendingScrollFrameRef.current = null;
+      const el = containerRef.current;
+      if (!el || !isPinnedToBottomRef.current) return;
+      el.scrollTop = el.scrollHeight;
+      setShowScrollButton(false);
+    });
+  }, []);
 
   // Force-scroll (e.g. when user sends a message)
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const el = containerRef.current;
     if (!el) return;
+    isPinnedToBottomRef.current = true;
     el.scrollTo({ top: el.scrollHeight, behavior });
     setShowScrollButton(false);
   }, []);

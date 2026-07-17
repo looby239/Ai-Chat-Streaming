@@ -38,7 +38,7 @@ export const ChatScreen: React.FC = () => {
     (text: string) => {
       sendMessage(text);
       setTimeout(() => {
-        scrollToBottom("smooth");
+        scrollToBottom("auto");
       }, 50);
     },
     [sendMessage, scrollToBottom]
@@ -57,7 +57,7 @@ export const ChatScreen: React.FC = () => {
     (id: string) => {
       retryMessage(id);
       setTimeout(() => {
-        scrollToBottom("smooth");
+        scrollToBottom("auto");
       }, 50);
     },
     [retryMessage, scrollToBottom]
