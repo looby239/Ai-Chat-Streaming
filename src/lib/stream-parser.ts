@@ -2,6 +2,8 @@
  * Parses an SSE or plain-text stream from a Response body.
  * Yields individual tokens as they arrive.
  */
+class StreamResponseError extends Error {}
+
 export async function* parseChatStream(
   response: Response,
   signal?: AbortSignal
@@ -69,6 +71,10 @@ export async function* parseChatStream(
           // Try parsing JSON payloads
           try {
             const parsed = JSON.parse(dataContent);
+
+            if (typeof parsed.error === "string" && parsed.error) {
+              throw new StreamResponseError(parsed.error);
+            }
             
             // Extract tokens using supported fields
             const token =
@@ -87,7 +93,10 @@ export async function* parseChatStream(
               const subToken = token.content ?? token.text ?? "";
               if (subToken) yield subToken;
             }
-          } catch {
+          } catch (error: unknown) {
+            if (error instanceof StreamResponseError) {
+              throw error;
+            }
             // If the payload is not JSON, treat the text after "data:" as the token itself
             yield dataContent;
           }

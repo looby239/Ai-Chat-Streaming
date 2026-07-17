@@ -3,123 +3,98 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const encoder = new TextEncoder();
+
+function encodeSse(data: unknown) {
+  return encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { message } = await req.json();
 
-    if (!message) {
+    if (typeof message !== "string" || !message.trim()) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
 
-    // Special trigger "error" to test error state and retry in frontend
-    if (message.trim().toLowerCase() === "lỗi kết nối") {
-      return NextResponse.json(
-        { error: "Máy chủ không phản hồi! Vui lòng thử lại sau." },
-        { status: 500 }
-      );
-    }
-
-    // Keep credentials server-side and read the provider configuration from .env.
     const apiKey = process.env.OPENAI_API_KEY;
     const model = process.env.OPENAI_MODEL;
 
-    if (apiKey && model) {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+    if (!apiKey || !model) {
+      return NextResponse.json(
+        {
+          error:
+            "Máy chủ chưa được cấu hình OPENAI_API_KEY và OPENAI_MODEL.",
         },
-        body: JSON.stringify({
-          model,
-          reasoning_effort: "minimal",
-          max_completion_tokens: 2048,
-          messages: [
-            {
-              role: "user",
-              content: message,
-            },
-          ],
-          stream: true,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return NextResponse.json(
-          { error: `Lỗi kết nối OpenAI: ${response.status} - ${errorText}` },
-          { status: response.status }
-        );
-      }
-
-      // Return the OpenAI stream directly to the client.
-      return new Response(response.body, {
-        headers: {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache, no-transform",
-          "Connection": "keep-alive",
-        },
-      });
+        { status: 503 }
+      );
     }
 
-    // --- FALLBACK MOCK STREAM ---
-    // Prepare mock text to stream back
-    const text = `Xin chào! Tôi là Trợ lý AI chạy ở chế độ Client-Server Streaming. Bạn vừa hỏi tôi: "${message}".
+    const abortController = new AbortController();
+    let streamClosed = false;
 
-Đây là một câu trả lời mẫu được truyền tải thông qua Server-Sent Events (SSE). Toàn bộ nội dung này đang được chia nhỏ thành các token riêng biệt và gửi trực tiếp đến trình duyệt của bạn với tần suất khoảng 20-80ms mỗi token.
-
-Dưới đây là một ví dụ về đoạn code để bạn tham khảo:
-\`\`\`typescript
-// Ví dụ về cấu trúc của một token được định dạng SSE
-interface SSEToken {
-  token: string;
-}
-
-const sendToken = (writer: WritableStreamDefaultWriter, text: string) => {
-  const payload = JSON.stringify({ token: text });
-  writer.write(new TextEncoder().encode(\`data: \${payload}\\n\\n\`));
-};
-\`\`\`
-
-Bạn có thể nhấn nút sao chép (Copy) ở góc dưới để lưu lại đoạn hội thoại này, hoặc nhấn Thử lại (Retry) nếu có bất kỳ lỗi nào xảy ra. Chúc bạn một ngày tốt lành!`;
-
-    const encoder = new TextEncoder();
-    let isStreamClosed = false;
-
-    // Create readable stream for streaming response
-    const stream = new ReadableStream({
+    const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
-        const tokens: string[] = [];
-        let i = 0;
-        while (i < text.length) {
-          const step = Math.floor(Math.random() * 3) + 1; // random 1-3 chars
-          tokens.push(text.substring(i, i + step));
-          i += step;
-        }
+        // Flush an initial SSE comment before waiting for OpenAI. This prevents
+        // deployment gateways from terminating the function for a slow TTFB.
+        controller.enqueue(encoder.encode(": connected\n\n"));
 
-        let tokenIndex = 0;
+        try {
+          const response = await fetch(
+            "https://api.openai.com/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model,
+                reasoning_effort: "minimal",
+                max_completion_tokens: 2048,
+                messages: [{ role: "user", content: message.trim() }],
+                stream: true,
+              }),
+              signal: abortController.signal,
+            }
+          );
 
-        const sendNextToken = () => {
-          if (isStreamClosed) return;
-
-          if (tokenIndex >= tokens.length) {
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-            controller.close();
-            return;
+          if (!response.ok) {
+            const details = await response.text();
+            throw new Error(
+              `Lỗi kết nối OpenAI: ${response.status} - ${details}`
+            );
           }
 
-          const token = tokens[tokenIndex++];
-          const payload = JSON.stringify({ token });
-          controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+          if (!response.body) {
+            throw new Error("OpenAI không trả về nội dung stream.");
+          }
 
-          const delay = Math.floor(Math.random() * 61) + 20;
-          setTimeout(sendNextToken, delay);
-        };
+          const reader = response.body.getReader();
 
-        sendNextToken();
+          while (!streamClosed) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+
+          if (!streamClosed) controller.close();
+        } catch (error: unknown) {
+          if (streamClosed) return;
+
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : "Đã xảy ra lỗi khi kết nối OpenAI.";
+
+          controller.enqueue(encodeSse({ error: errorMessage }));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        }
       },
       cancel() {
-        isStreamClosed = true;
+        streamClosed = true;
+        abortController.abort();
       },
     });
 
@@ -127,11 +102,14 @@ Bạn có thể nhấn nút sao chép (Copy) ở góc dưới để lưu lại �
       headers: {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Đã xảy ra lỗi máy chủ";
+    const message =
+      error instanceof Error ? error.message : "Đã xảy ra lỗi máy chủ";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
