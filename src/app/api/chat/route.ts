@@ -18,21 +18,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if OpenRouter API Key is configured in environment variables
-    const openrouterKey = process.env.OPENROUTER_API_KEY;
+    // Keep credentials server-side and read the provider configuration from .env.
+    const apiKey = process.env.OPENAI_API_KEY;
+    const model = process.env.OPENAI_MODEL;
 
-    if (openrouterKey) {
-      // Request OpenRouter securely
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    if (apiKey && model) {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${openrouterKey}`,
-          "HTTP-Referer": "http://localhost:3000",
-          "X-Title": "AI Chat Streaming Client",
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: "openrouter/free",
+          model,
           messages: [
             {
               role: "user",
@@ -46,12 +44,12 @@ export async function POST(req: NextRequest) {
       if (!response.ok) {
         const errorText = await response.text();
         return NextResponse.json(
-          { error: `Lỗi kết nối OpenRouter: ${response.status} - ${errorText}` },
+          { error: `Lỗi kết nối OpenAI: ${response.status} - ${errorText}` },
           { status: response.status }
         );
       }
 
-      // Return OpenRouter stream directly to client
+      // Return the OpenAI stream directly to the client.
       return new Response(response.body, {
         headers: {
           "Content-Type": "text/event-stream; charset=utf-8",
