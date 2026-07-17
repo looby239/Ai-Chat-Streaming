@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,6 +32,8 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           model,
+          reasoning_effort: "minimal",
+          max_completion_tokens: 2048,
           messages: [
             {
               role: "user",
