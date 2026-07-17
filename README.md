@@ -132,27 +132,6 @@ Cơ chế tự động cuộn được tinh chỉnh tỉ mỉ:
 1. **Lỗi mạng đột ngột:** Bong bóng của Assistant chuyển sang trạng thái `error`, hiển thị viền đỏ kèm thông báo chi tiết, đồng thời hiển thị nút **Thử lại (Retry)**.
 2. **Ký tự lạ hoặc Dữ liệu SSE bị vỡ chunk:** Bộ đệm dòng (`buffer`) của `stream-parser.ts` sẽ giữ lại phần dữ liệu chưa hoàn chỉnh và chỉ xử lý khi nhận đủ dòng kết thúc bằng ký tự xuống dòng.
 3. **Thoát trang khi đang stream:** Component hook hủy request bằng `AbortController` và hủy animation frame trong cleanup function của `useEffect` để tránh ghi đè state trên component đã unmount.
-4. **Giả lập lỗi:** Để kiểm thử luồng lỗi và tính năng Retry, hãy nhập prompt là `error`. Hệ thống sẽ trả về lỗi 500 từ mock API để bạn kiểm tra giao diện.
+4. **Giả lập lỗi:** Để kiểm thử luồng lỗi và tính năng Retry, hãy nhập prompt là `lỗi kết nối`. Hệ thống sẽ trả về lỗi 500 từ mock API để bạn kiểm tra giao diện.
 
----
 
-## 7. Hướng Dẫn Quay Video Demo (Khoảng 2 phút)
-
-Để trình bày tốt nhất sản phẩm này trong video test:
-1. **Giới thiệu:** Nêu ngắn gọn công nghệ sử dụng (Next.js 15, Tailwind v4, không thư viện UI chat).
-2. **Luồng thành công:** Nhập một câu hỏi bình thường, chỉ ra hiệu ứng streaming mượt mà (có con trỏ nhấp nháy ở cuối) và hành vi cuộn tự động xuống đáy.
-3. **Copy & Clear:** Thực hiện sao chép phản hồi (thấy nhãn "Copied") và xóa lịch sử trò chuyện.
-4. **Hủy stream (Stop Generation):** Gửi câu hỏi dài, nhấn nút Stop để chứng minh stream dừng lại tức thì và bong bóng đổi trạng thái.
-5. **Kiểm tra IME bộ gõ:** Gõ một cụm từ tiếng Việt dài có dấu (Telex) bằng Enter để chứng minh không bị gửi nhầm khi đang gõ tổ hợp phím.
-6. **Thử nghiệm Lỗi & Thử lại (Retry):** Nhập chữ `error` để kích hoạt lỗi giả lập. Chỉ ra thông báo lỗi màu đỏ trực quan và bấm nút **Thử lại (Retry)** để khôi phục stream thành công.
-7. **Auto-scroll khi cuộn tay:** Gửi một câu hỏi dài, cuộn lên trên khi AI đang viết, chỉ ra nút báo "Tin nhắn mới ở dưới" và bấm nút đó để cuộn xuống đáy.
-
----
-
-## 8. Triển Khai Lên Vercel
-
-Ứng dụng hoàn toàn tương thích và dễ dàng deploy lên Vercel:
-1. Đẩy mã nguồn lên một kho lưu trữ GitHub cá nhân.
-2. Truy cập [Vercel Dashboard](https://vercel.com) và nhập dự án.
-3. Cấu hình biến môi trường `NEXT_PUBLIC_CHAT_API_URL` trỏ đến endpoint thật của bạn (hoặc bỏ trống để sử dụng mock API nội bộ).
-4. Nhấn **Deploy**.

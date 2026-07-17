@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     // Special trigger "error" to test error state and retry in frontend
     if (message.trim().toLowerCase() === "lỗi kết nối") {
       return NextResponse.json(
-        { error: "Máy chủ không phản hồi!(Giả lập lỗi kết nối)" },
+        { error: "Máy chủ không phản hồi! Vui lòng thử lại sau." },
         { status: 500 }
       );
     }
